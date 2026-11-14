@@ -1,0 +1,977 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PPTX Voice Studio — PowerPoint 発表者ノート自動動画化</title>
+  <style>
+    :root {
+      --bg: #0b1020;
+      --surface: #131a2e;
+      --surface-2: #1b2440;
+      --border: #2a3558;
+      --text: #eef2ff;
+      --text-muted: #9aa7c7;
+      --accent: #6366f1;
+      --accent-hover: #818cf8;
+      --success: #22c55e;
+      --warning: #f59e0b;
+      --danger: #ef4444;
+      --radius: 14px;
+    }
+
+    @media (prefers-color-scheme: light) {
+      :root {
+        --bg: #f4f6fb;
+        --surface: #ffffff;
+        --surface-2: #f0f4ff;
+        --border: #dce3f3;
+        --text: #0f172a;
+        --text-muted: #475569;
+      }
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: "Segoe UI", "Hiragino Kaku Gothic ProN", "Yu Gothic UI", system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      min-height: 100vh;
+    }
+
+    .container {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 32px 20px 64px;
+    }
+
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 28px;
+      flex-wrap: wrap;
+    }
+
+    .title-group h1 {
+      margin: 0;
+      font-size: 1.65rem;
+      letter-spacing: -0.02em;
+    }
+
+    .title-group p {
+      margin: 4px 0 0;
+      color: var(--text-muted);
+      font-size: 0.95rem;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      border-radius: 999px;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      font-size: 0.82rem;
+      color: var(--text-muted);
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 20px;
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 24px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.14);
+    }
+
+    .card h2 {
+      margin: 0 0 16px;
+      font-size: 1.1rem;
+      font-weight: 600;
+    }
+
+    .dropzone {
+      border: 2px dashed var(--border);
+      border-radius: 12px;
+      padding: 32px 20px;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color 0.2s, background-color 0.2s;
+      background: var(--surface-2);
+    }
+
+    .dropzone.dragover {
+      border-color: var(--accent);
+      background: rgba(99, 102, 241, 0.1);
+    }
+
+    .dropzone input[type="file"] {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .dropzone-title {
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+
+    .dropzone-sub {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+    }
+
+    .file-pill {
+      margin-top: 12px;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 12px;
+      border-radius: 8px;
+      background: rgba(99, 102, 241, 0.15);
+      border: 1px solid rgba(99, 102, 241, 0.4);
+      font-size: 0.88rem;
+    }
+
+    .form-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      margin-top: 20px;
+    }
+
+    label.field {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      font-size: 0.88rem;
+      font-weight: 500;
+    }
+
+    select, input[type="number"], input[type="text"], textarea {
+      width: 100%;
+      padding: 10px 12px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: var(--surface-2);
+      color: var(--text);
+      font-size: 0.95rem;
+      font-family: inherit;
+    }
+
+    select:focus, input:focus, textarea:focus, button:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
+
+    .actions {
+      margin-top: 22px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 11px 20px;
+      border-radius: 10px;
+      border: none;
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      text-decoration: none;
+      transition: background-color 0.2s, opacity 0.2s;
+    }
+
+    .btn-primary {
+      background: var(--accent);
+      color: #ffffff;
+    }
+
+    .btn-primary:hover:not(:disabled) {
+      background: var(--accent-hover);
+    }
+
+    .btn-primary:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+    }
+
+    .btn-secondary {
+      background: var(--surface-2);
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+
+    .status-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 12px;
+      flex-wrap: wrap;
+    }
+
+    .status-pill {
+      padding: 4px 12px;
+      border-radius: 999px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+    }
+
+    .status-pill.running { color: var(--warning); border-color: rgba(245, 158, 11, 0.4); }
+    .status-pill.completed { color: var(--success); border-color: rgba(34, 197, 94, 0.4); }
+    .status-pill.failed { color: var(--danger); border-color: rgba(239, 68, 68, 0.4); }
+
+    progress {
+      width: 100%;
+      height: 10px;
+      border-radius: 999px;
+      overflow: hidden;
+      margin-bottom: 14px;
+    }
+
+    .log-box {
+      background: #070b16;
+      color: #cbd5e1;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 14px;
+      font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+      font-size: 0.82rem;
+      max-height: 240px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    video {
+      width: 100%;
+      border-radius: 12px;
+      background: #000;
+      margin-top: 10px;
+      border: 1px solid var(--border);
+    }
+
+    .hidden { display: none !important; }
+
+    .error-banner {
+      margin-top: 14px;
+      padding: 12px 14px;
+      border-radius: 10px;
+      background: rgba(239, 68, 68, 0.14);
+      border: 1px solid rgba(239, 68, 68, 0.45);
+      color: #fecaca;
+      font-size: 0.9rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="title-group">
+        <h1>PPTX Voice Studio</h1>
+        <p>PowerPoint 発表者ノートを自動音声化し、高画質 MP4 動画を生成します</p>
+      </div>
+      <span class="badge">Local COM + edge-tts + MoviePy</span>
+    </header>
+
+    <div class="grid">
+      <section class="card">
+        <h2>1. ファイル選択 &amp; 生成設定</h2>
+        <form id="pipeline-form">
+          <div id="dropzone" class="dropzone" tabindex="0" role="button" aria-label="PowerPointファイルを選択">
+            <input id="pptx-input" name="file" type="file" accept=".pptx" required>
+            <div class="dropzone-title">.pptx ファイルをドラッグ＆ドロップ、またはクリックして選択</div>
+            <div class="dropzone-sub">Microsoft PowerPoint (.pptx) のみ対応（最大 200 MB）</div>
+            <div id="file-pill" class="file-pill hidden"></div>
+          </div>
+
+          <div class="form-grid">
+            <label class="field">
+              音声生成方式
+              <select id="mode-select" name="mode">
+                <option value="edge-tts" selected>標準モード (edge-tts・高速/無音生成)</option>
+                <option value="voicevox">VOICEVOX Engine モード (ローカル API・話者/スタイル選択)</option>
+                <option value="edge-record">Edge 再生＆録音モード (ブラウザ音声＋WASAPI録音)</option>
+              </select>
+            </label>
+
+            <label id="voice-field" class="field">
+              <span>
+                話者 (日本語 Voice)
+                <small id="voice-meta" style="color: var(--text-muted); font-weight: 400;"></small>
+              </span>
+              <div style="display: flex; gap: 8px; align-items: center;">
+                <select id="voice-select" name="voice"></select>
+                <button id="refresh-voices-btn" type="button" class="btn btn-secondary" style="padding: 10px 12px; white-space: nowrap;" title="話者一覧を再取得">更新</button>
+              </div>
+            </label>
+
+            <label class="field">
+              解像度
+              <select id="resolution-select" name="resolution">
+                <option value="1920x1080" selected>1920 x 1080 (Full HD)</option>
+                <option value="1280x720">1280 x 720 (HD)</option>
+              </select>
+            </label>
+
+            <label class="field">
+              フレームレート (FPS)
+              <input id="fps-input" name="fps" type="number" min="1" max="60" value="30">
+            </label>
+
+            <label class="field">
+              スライド間ポーズ (秒)
+              <input id="pause-input" name="pause" type="number" min="0" max="5" step="0.1" value="0.8">
+            </label>
+          </div>
+
+          <div id="record-notice" class="hidden" style="margin-top: 14px; padding: 12px 14px; border-radius: 10px; background: rgba(245, 158, 11, 0.14); border: 1px solid rgba(245, 158, 11, 0.45); font-size: 0.88rem;">
+            <strong>Edge 再生＆録音モード:</strong> 動画生成中はブラウザから読み上げ音声が実時間で再生され、Windows の出力音声 (WASAPI) を録音します。他アプリの通知音をオフにしてお待ちください。
+          </div>
+
+          <div id="voicevox-panel" class="hidden" style="margin-top: 14px; padding: 16px; border-radius: 12px; background: var(--surface-2); border: 1px solid var(--border);">
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 12px;">
+              <strong style="font-size: 0.95rem;">VOICEVOX Engine 設定 <small id="vv-meta" style="color: var(--text-muted); font-weight: 400;"></small></strong>
+              <button id="vv-fetch-btn" type="button" class="btn btn-secondary" style="padding: 8px 12px;">話者・スタイルを取得</button>
+            </div>
+            <div class="form-grid">
+              <label class="field">
+                Engine URL
+                <input id="vv-url" type="url" value="http://127.0.0.1:50021" placeholder="http://127.0.0.1:50021">
+              </label>
+              <label class="field">
+                話者 (キャラクター)
+                <select id="vv-speaker-select"></select>
+              </label>
+              <label class="field">
+                スタイル
+                <select id="vv-style-select"></select>
+              </label>
+              <label class="field">
+                話速 (speedScale)
+                <input id="vv-speed" type="number" min="0.5" max="2.0" step="0.05" value="1.0">
+              </label>
+              <label class="field">
+                音高 (pitchScale)
+                <input id="vv-pitch" type="number" min="-0.15" max="0.15" step="0.01" value="0.0">
+              </label>
+              <label class="field">
+                抑揚 (intonationScale)
+                <input id="vv-intonation" type="number" min="0.0" max="2.0" step="0.05" value="1.0">
+              </label>
+              <label class="field">
+                音量 (volumeScale)
+                <input id="vv-volume" type="number" min="0.0" max="2.0" step="0.05" value="1.0">
+              </label>
+            </div>
+          </div>
+
+          <div style="margin-top: 18px; padding: 16px; border-radius: 12px; background: var(--surface-2); border: 1px solid var(--border);">
+            <label class="field">
+              サンプルテキスト（音声確認用・自由に編集可能）
+              <textarea id="preview-text" rows="2" maxlength="500">こんにちは。PPTX Voice Studio の音声プレビューです。プレゼンテーションの内容を分かりやすくお伝えします。</textarea>
+            </label>
+            <div style="margin-top: 10px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+              <button id="preview-voice-btn" type="button" class="btn btn-secondary">サンプル音声を再生</button>
+              <audio id="preview-audio" controls class="hidden" style="height: 38px; flex: 1; min-width: 240px;"></audio>
+            </div>
+          </div>
+
+          <div class="actions">
+            <button id="submit-btn" type="submit" class="btn btn-primary">動画を生成する</button>
+            <button id="cancel-btn" type="button" class="btn btn-secondary hidden" style="border-color: rgba(239, 68, 68, 0.55); color: #ef4444;">生成を中止</button>
+          </div>
+          <div id="form-error" class="error-banner hidden" role="alert"></div>
+        </form>
+      </section>
+
+      <section id="status-card" class="card hidden" aria-live="polite">
+        <div class="status-row">
+          <h2 style="margin: 0;">2. 実行ステータス &amp; ログ</h2>
+          <span id="status-pill" class="status-pill">待機中</span>
+        </div>
+        <progress id="progress-bar" max="100" value="0"></progress>
+        <div id="log-box" class="log-box"></div>
+      </section>
+
+      <section id="result-card" class="card hidden">
+        <h2>3. 生成結果プレビュー</h2>
+        <p id="saved-path-note" style="margin: 0 0 10px; font-size: 0.88rem; color: var(--text-muted); word-break: break-all;"></p>
+        <video id="result-video" controls preload="metadata"></video>
+        <div class="actions">
+          <a id="download-link" class="btn btn-primary" href="#" download>MP4 をダウンロード</a>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <script>
+    const form = document.getElementById("pipeline-form");
+    const dropzone = document.getElementById("dropzone");
+    const fileInput = document.getElementById("pptx-input");
+    const filePill = document.getElementById("file-pill");
+    const modeSelect = document.getElementById("mode-select");
+    const recordNotice = document.getElementById("record-notice");
+    const voiceField = document.getElementById("voice-field");
+    const voicevoxPanel = document.getElementById("voicevox-panel");
+    const vvMeta = document.getElementById("vv-meta");
+    const vvFetchBtn = document.getElementById("vv-fetch-btn");
+    const vvUrlInput = document.getElementById("vv-url");
+    const vvSpeakerSelect = document.getElementById("vv-speaker-select");
+    const vvStyleSelect = document.getElementById("vv-style-select");
+    const vvSpeedInput = document.getElementById("vv-speed");
+    const vvPitchInput = document.getElementById("vv-pitch");
+    const vvIntonationInput = document.getElementById("vv-intonation");
+    const vvVolumeInput = document.getElementById("vv-volume");
+    const voiceSelect = document.getElementById("voice-select");
+    const voiceMeta = document.getElementById("voice-meta");
+    const previewVoiceBtn = document.getElementById("preview-voice-btn");
+    const previewTextInput = document.getElementById("preview-text");
+    const previewAudio = document.getElementById("preview-audio");
+    const refreshVoicesBtn = document.getElementById("refresh-voices-btn");
+    const resolutionSelect = document.getElementById("resolution-select");
+    const fpsInput = document.getElementById("fps-input");
+    const pauseInput = document.getElementById("pause-input");
+    const submitBtn = document.getElementById("submit-btn");
+    const cancelBtn = document.getElementById("cancel-btn");
+    const formError = document.getElementById("form-error");
+
+    const statusCard = document.getElementById("status-card");
+    const statusPill = document.getElementById("status-pill");
+    const progressBar = document.getElementById("progress-bar");
+    const logBox = document.getElementById("log-box");
+
+    const resultCard = document.getElementById("result-card");
+    const resultVideo = document.getElementById("result-video");
+    const downloadLink = document.getElementById("download-link");
+
+    let pollTimer = null;
+    let currentJobId = null;
+    let cancelRequested = false;
+
+    let serverVoicesCache = [];
+    let serverDefaultVoice = "";
+    let serverVoiceSource = "";
+    let voicevoxSpeakersCache = [];
+
+    function renderVoicevoxStyles() {
+      const selectedName = vvSpeakerSelect.value;
+      const speaker = voicevoxSpeakersCache.find((s) => s.name === selectedName);
+      vvStyleSelect.replaceChildren();
+      if (!speaker || !Array.isArray(speaker.styles)) return;
+      for (const st of speaker.styles) {
+        const opt = document.createElement("option");
+        opt.value = String(st.id);
+        opt.textContent = `${st.name} (id: ${st.id})`;
+        vvStyleSelect.appendChild(opt);
+      }
+    }
+
+    async function loadVoicevoxSpeakers() {
+      vvFetchBtn.disabled = true;
+      vvMeta.textContent = "取得中...";
+      showError("");
+      try {
+        const url = encodeURIComponent((vvUrlInput.value || "http://127.0.0.1:50021").trim());
+        const res = await fetch(`/api/voicevox-speakers?url=${url}`);
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data.error || "VOICEVOX Engine から話者一覧を取得できませんでした。");
+        }
+        voicevoxSpeakersCache = Array.isArray(data.speakers) ? data.speakers : [];
+        const prevSpeaker = vvSpeakerSelect.value;
+        vvSpeakerSelect.replaceChildren();
+        for (const sp of voicevoxSpeakersCache) {
+          const opt = document.createElement("option");
+          opt.value = sp.name;
+          opt.textContent = sp.name;
+          vvSpeakerSelect.appendChild(opt);
+        }
+        if (prevSpeaker && voicevoxSpeakersCache.some((s) => s.name === prevSpeaker)) {
+          vvSpeakerSelect.value = prevSpeaker;
+        }
+        renderVoicevoxStyles();
+        vvMeta.textContent = `(${voicevoxSpeakersCache.length}キャラクター)`;
+      } catch (err) {
+        voicevoxSpeakersCache = [];
+        vvSpeakerSelect.replaceChildren();
+        vvStyleSelect.replaceChildren();
+        vvMeta.textContent = "(未接続)";
+        showError(err.message);
+      } finally {
+        vvFetchBtn.disabled = false;
+      }
+    }
+
+    function getBrowserJapaneseVoices() {
+      if (!("speechSynthesis" in window)) return [];
+      return window.speechSynthesis
+        .getVoices()
+        .filter((v) => (v.lang || "").toLowerCase().startsWith("ja"));
+    }
+
+    function speakWithBrowserVoice(text, voiceName) {
+      return new Promise((resolve, reject) => {
+        if (!("speechSynthesis" in window)) {
+          reject(new Error("このブラウザは Web Speech API に対応していません。"));
+          return;
+        }
+        const voiceObj = getBrowserJapaneseVoices().find((v) => v.name === voiceName);
+        const utter = new SpeechSynthesisUtterance(text);
+        utter.lang = "ja-JP";
+        if (voiceObj) utter.voice = voiceObj;
+        utter.onend = () => resolve();
+        utter.onerror = (ev) => reject(new Error(`読み上げエラー: ${ev.error || "unknown"}`));
+
+        const wasSpeaking = window.speechSynthesis.speaking || window.speechSynthesis.pending;
+        if (wasSpeaking) {
+          window.speechSynthesis.cancel();
+          setTimeout(() => window.speechSynthesis.speak(utter), 60);
+        } else {
+          window.speechSynthesis.speak(utter);
+        }
+      });
+    }
+
+    function renderVoiceOptions() {
+      const mode = modeSelect.value;
+      const previous = voiceSelect.value;
+      voiceSelect.replaceChildren();
+
+      recordNotice.classList.toggle("hidden", mode !== "edge-record");
+      voiceField.classList.toggle("hidden", mode === "voicevox");
+      voicevoxPanel.classList.toggle("hidden", mode !== "voicevox");
+
+      if (mode === "voicevox") {
+        if (voicevoxSpeakersCache.length === 0) {
+          loadVoicevoxSpeakers();
+        }
+        return;
+      }
+
+      if (mode === "edge-record") {
+        const browserVoices = getBrowserJapaneseVoices();
+        for (const bv of browserVoices) {
+          const opt = document.createElement("option");
+          opt.value = bv.name;
+          opt.textContent = `${bv.name} (${bv.lang})`;
+          voiceSelect.appendChild(opt);
+        }
+        if (previous && [...voiceSelect.options].some((o) => o.value === previous)) {
+          voiceSelect.value = previous;
+        }
+        voiceMeta.textContent = `(${browserVoices.length}件・ブラウザ音声)`;
+        return;
+      }
+
+      for (const v of serverVoicesCache) {
+        const opt = document.createElement("option");
+        opt.value = v.id;
+        opt.textContent = v.label;
+        voiceSelect.appendChild(opt);
+      }
+
+      if (previous && [...voiceSelect.options].some((o) => o.value === previous)) {
+        voiceSelect.value = previous;
+      } else if (serverDefaultVoice) {
+        voiceSelect.value = serverDefaultVoice;
+      }
+
+      const sourceLabel = serverVoiceSource === "edge-tts" ? "edge-tts" : "プリセット";
+      voiceMeta.textContent = `(${serverVoicesCache.length}件・${sourceLabel})`;
+    }
+
+    let previewObjectUrl = null;
+
+    async function loadVoices(forceRefresh = false) {
+      refreshVoicesBtn.disabled = true;
+      voiceMeta.textContent = "取得中...";
+      try {
+        const url = forceRefresh ? "/api/voices?refresh=1" : "/api/voices";
+        const res = await fetch(url);
+        const data = await res.json();
+        serverVoicesCache = Array.isArray(data.voices) ? data.voices : [];
+        serverDefaultVoice = data.default || "";
+        serverVoiceSource = data.source || "";
+        renderVoiceOptions();
+      } catch (err) {
+        voiceMeta.textContent = "(取得失敗)";
+        showError("話者一覧の取得に失敗しました。");
+      } finally {
+        refreshVoicesBtn.disabled = false;
+      }
+    }
+
+    if ("speechSynthesis" in window) {
+      window.speechSynthesis.onvoiceschanged = () => {
+        if (modeSelect.value === "edge-record") renderVoiceOptions();
+      };
+    }
+
+    modeSelect.addEventListener("change", () => {
+      showError("");
+      previewAudio.classList.add("hidden");
+      renderVoiceOptions();
+    });
+
+    voiceSelect.addEventListener("change", () => showError(""));
+    vvFetchBtn.addEventListener("click", () => loadVoicevoxSpeakers());
+    vvSpeakerSelect.addEventListener("change", () => {
+      showError("");
+      renderVoicevoxStyles();
+    });
+
+    previewVoiceBtn.addEventListener("click", async () => {
+      showError("");
+      const sampleText = (previewTextInput.value || "").trim();
+      if (!sampleText) {
+        showError("サンプルテキストを入力してください。");
+        return;
+      }
+
+      if (modeSelect.value === "edge-record") {
+        try {
+          await speakWithBrowserVoice(sampleText, voiceSelect.value);
+        } catch (err) {
+          showError(err.message);
+        }
+        return;
+      }
+
+      if (modeSelect.value === "voicevox" && !vvStyleSelect.value) {
+        showError("VOICEVOX の話者・スタイルを取得して選択してください。");
+        return;
+      }
+
+      previewVoiceBtn.disabled = true;
+      const origLabel = previewVoiceBtn.textContent;
+      previewVoiceBtn.textContent = "生成中...";
+      try {
+        const previewPayload = modeSelect.value === "voicevox"
+          ? {
+              voice: `voicevox:${vvStyleSelect.value}`,
+              text: sampleText,
+              voicevox_url: (vvUrlInput.value || "http://127.0.0.1:50021").trim(),
+              voicevox_speed: Number(vvSpeedInput.value || 1.0),
+              voicevox_pitch: Number(vvPitchInput.value || 0.0),
+              voicevox_intonation: Number(vvIntonationInput.value || 1.0),
+              voicevox_volume: Number(vvVolumeInput.value || 1.0),
+            }
+          : { voice: voiceSelect.value, text: sampleText };
+        const res = await fetch("/api/tts-preview", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(previewPayload),
+        });
+        if (res.status === 404) {
+          throw new Error("サーバーが古いバージョンのまま起動しています。古いコンソールを閉じて start_webui.bat を再起動してください。");
+        }
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.error || "音声プレビューの生成に失敗しました。");
+        }
+        const blob = await res.blob();
+        if (previewObjectUrl) URL.revokeObjectURL(previewObjectUrl);
+        previewObjectUrl = URL.createObjectURL(blob);
+        previewAudio.src = previewObjectUrl;
+        previewAudio.classList.remove("hidden");
+        previewAudio.load();
+        await previewAudio.play().catch(() => {});
+      } catch (err) {
+        showError(err.message);
+      } finally {
+        previewVoiceBtn.disabled = false;
+        previewVoiceBtn.textContent = origLabel;
+      }
+    });
+
+    refreshVoicesBtn.addEventListener("click", () => loadVoices(true));
+
+    function showError(msg) {
+      if (!msg) {
+        formError.classList.add("hidden");
+        formError.textContent = "";
+        return;
+      }
+      formError.textContent = msg;
+      formError.classList.remove("hidden");
+    }
+
+    function updateSelectedFile(file) {
+      if (!file) {
+        filePill.classList.add("hidden");
+        return;
+      }
+      const mb = (file.size / (1024 * 1024)).toFixed(2);
+      filePill.textContent = `${file.name} (${mb} MB)`;
+      filePill.classList.remove("hidden");
+      showError("");
+    }
+
+    dropzone.addEventListener("click", () => fileInput.click());
+    dropzone.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        fileInput.click();
+      }
+    });
+
+    dropzone.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      dropzone.classList.add("dragover");
+    });
+    dropzone.addEventListener("dragleave", () => dropzone.classList.remove("dragover"));
+    dropzone.addEventListener("drop", (e) => {
+      e.preventDefault();
+      dropzone.classList.remove("dragover");
+      const files = e.dataTransfer?.files;
+      if (files && files.length > 0) {
+        fileInput.files = files;
+        updateSelectedFile(files[0]);
+      }
+    });
+
+    fileInput.addEventListener("change", () => {
+      updateSelectedFile(fileInput.files?.[0]);
+    });
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      showError("");
+
+      const file = fileInput.files?.[0];
+      if (!file) {
+        showError(".pptx ファイルを選択してください。");
+        return;
+      }
+      if (!file.name.toLowerCase().endsWith(".pptx")) {
+        showError("拡張子が .pptx のファイルのみアップロードできます。");
+        return;
+      }
+      if (modeSelect.value === "edge-record" && !voiceSelect.value) {
+        showError("ブラウザの日本語話者が取得できていません。Edge / Chrome で開いて「更新」を押してください。");
+        return;
+      }
+      if (modeSelect.value === "voicevox" && !vvStyleSelect.value) {
+        showError("VOICEVOX の話者・スタイルを取得して選択してください。");
+        return;
+      }
+
+      const [width, height] = resolutionSelect.value.split("x");
+      const body = new FormData();
+      body.append("file", file);
+      body.append("mode", modeSelect.value);
+      body.append(
+        "voice",
+        modeSelect.value === "voicevox" ? `voicevox:${vvStyleSelect.value}` : voiceSelect.value
+      );
+      if (modeSelect.value === "voicevox") {
+        body.append("voicevox_url", (vvUrlInput.value || "http://127.0.0.1:50021").trim());
+        body.append("voicevox_speed", vvSpeedInput.value || "1.0");
+        body.append("voicevox_pitch", vvPitchInput.value || "0.0");
+        body.append("voicevox_intonation", vvIntonationInput.value || "1.0");
+        body.append("voicevox_volume", vvVolumeInput.value || "1.0");
+      }
+      body.append("width", width);
+      body.append("height", height);
+      body.append("fps", fpsInput.value);
+      body.append("pause", pauseInput.value);
+
+      submitBtn.disabled = true;
+      cancelRequested = false;
+      currentJobId = null;
+      cancelBtn.classList.remove("hidden");
+      cancelBtn.disabled = false;
+      resultCard.classList.add("hidden");
+      statusCard.classList.remove("hidden");
+      statusPill.className = "status-pill running";
+      statusPill.textContent = "アップロード中...";
+      progressBar.value = 5;
+      logBox.textContent = "";
+
+      try {
+        const res = await fetch("/api/jobs", { method: "POST", body });
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data.error || "ジョブの開始に失敗しました。");
+        }
+        currentJobId = data.job_id;
+        startPolling(data.job_id);
+      } catch (err) {
+        submitBtn.disabled = false;
+        cancelBtn.classList.add("hidden");
+        statusPill.className = "status-pill failed";
+        statusPill.textContent = "エラー";
+        showError(err.message);
+      }
+    });
+
+    function startPolling(jobId) {
+      if (pollTimer) clearInterval(pollTimer);
+      const poll = async () => {
+        try {
+          const res = await fetch(`/api/jobs/${encodeURIComponent(jobId)}`);
+          const job = await res.json();
+          if (!res.ok) throw new Error(job.error || "ステータス取得失敗");
+
+          progressBar.value = job.progress ?? 0;
+          logBox.textContent = (job.logs || []).join("\n");
+          logBox.scrollTop = logBox.scrollHeight;
+
+          if (job.status === "queued") {
+            statusPill.className = "status-pill running";
+            statusPill.textContent = "待機中...";
+          } else if (job.status === "running") {
+            statusPill.className = "status-pill running";
+            statusPill.textContent = job.phase || "処理中...";
+          } else if (job.status === "recording_needed") {
+            clearInterval(pollTimer);
+            await runEdgeRecordingSequence(jobId, job.slides || [], voiceSelect.value);
+          } else if (job.status === "completed") {
+            clearInterval(pollTimer);
+            submitBtn.disabled = false;
+            cancelBtn.classList.add("hidden");
+            currentJobId = null;
+            statusPill.className = "status-pill completed";
+            statusPill.textContent = "完了";
+            progressBar.value = 100;
+
+            const videoUrl = `/api/jobs/${encodeURIComponent(jobId)}/video`;
+            const dlUrl = `/api/jobs/${encodeURIComponent(jobId)}/download`;
+            document.getElementById("saved-path-note").textContent =
+              job.output_path ? `保存先: ${job.output_path}` : "";
+            resultVideo.src = videoUrl;
+            downloadLink.href = dlUrl;
+            downloadLink.download = job.output_filename || "output.mp4";
+            resultCard.classList.remove("hidden");
+          } else if (job.status === "cancelled") {
+            clearInterval(pollTimer);
+            submitBtn.disabled = false;
+            cancelBtn.classList.add("hidden");
+            currentJobId = null;
+            statusPill.className = "status-pill failed";
+            statusPill.textContent = "中止";
+          } else if (job.status === "failed") {
+            clearInterval(pollTimer);
+            submitBtn.disabled = false;
+            cancelBtn.classList.add("hidden");
+            currentJobId = null;
+            statusPill.className = "status-pill failed";
+            statusPill.textContent = "失敗";
+            showError(job.error || "動画生成中にエラーが発生しました。");
+          }
+        } catch (err) {
+          clearInterval(pollTimer);
+          submitBtn.disabled = false;
+          cancelBtn.classList.add("hidden");
+          currentJobId = null;
+          statusPill.className = "status-pill failed";
+          statusPill.textContent = "通信エラー";
+          showError(err.message);
+        }
+      };
+
+      poll();
+      pollTimer = setInterval(poll, 1200);
+    }
+
+    cancelBtn.addEventListener("click", async () => {
+      cancelRequested = true;
+      cancelBtn.disabled = true;
+      if ("speechSynthesis" in window) {
+        window.speechSynthesis.cancel();
+      }
+      if (currentJobId) {
+        await fetch(`/api/jobs/${encodeURIComponent(currentJobId)}/cancel`, {
+          method: "POST",
+        }).catch(() => {});
+      }
+      if (pollTimer) clearInterval(pollTimer);
+      submitBtn.disabled = false;
+      cancelBtn.classList.add("hidden");
+      statusPill.className = "status-pill failed";
+      statusPill.textContent = "中止";
+    });
+
+    async function runEdgeRecordingSequence(jobId, slides, voiceName) {
+      try {
+        for (let i = 0; i < slides.length; i++) {
+          if (cancelRequested) return;
+          const slide = slides[i];
+          statusPill.className = "status-pill running";
+          statusPill.textContent = `録音中: スライド ${slide.index} / ${slides.length}`;
+          progressBar.value = 30 + Math.round((45 * i) / Math.max(1, slides.length));
+
+          const startRes = await fetch(`/api/jobs/${encodeURIComponent(jobId)}/record-start`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ slide_index: slide.index }),
+          });
+          if (!startRes.ok) {
+            const err = await startRes.json().catch(() => ({}));
+            throw new Error(err.error || "録音開始に失敗しました。");
+          }
+
+          await new Promise((r) => setTimeout(r, 120));
+          if (cancelRequested) return;
+          await speakWithBrowserVoice(slide.note_text, voiceName);
+          if (cancelRequested) return;
+          await new Promise((r) => setTimeout(r, 200));
+          if (cancelRequested) return;
+
+          const stopRes = await fetch(`/api/jobs/${encodeURIComponent(jobId)}/record-stop`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ slide_index: slide.index }),
+          });
+          if (!stopRes.ok) {
+            const err = await stopRes.json().catch(() => ({}));
+            throw new Error(err.error || "録音停止に失敗しました。");
+          }
+        }
+
+        statusPill.textContent = "フェーズ3: MP4 動画エンコード開始...";
+        const compRes = await fetch(`/api/jobs/${encodeURIComponent(jobId)}/compose`, {
+          method: "POST",
+        });
+        if (!compRes.ok) {
+          const err = await compRes.json().catch(() => ({}));
+          throw new Error(err.error || "動画結合の開始に失敗しました。");
+        }
+        startPolling(jobId);
+      } catch (err) {
+        if (cancelRequested) return;
+        submitBtn.disabled = false;
+        cancelBtn.classList.add("hidden");
+        currentJobId = null;
+        statusPill.className = "status-pill failed";
+        statusPill.textContent = "録音エラー";
+        showError(err.message);
+      }
+    }
+
+    loadVoices();
+  </script>
+</body>
+</html>
