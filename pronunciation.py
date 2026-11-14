@@ -76,6 +76,46 @@ def _needs_ai_normalization(text: str) -> bool:
     return bool(re.search(r"[A-Za-z]", text))
 
 
+def _build_ai_headers(api_key: str = "") -> dict[str, str]:
+    """LMproxy (OpenAI 互換) 呼び出し用の HTTP ヘッダを構築する."""
+    resolved_key = (
+        api_key.strip()
+        or os.environ.get("LMPROXY_API_KEY", "").strip()
+        or os.environ.get("OPENAI_API_KEY", "").strip()
+    )
+    headers = {"Content-Type": "application/json"}
+    if resolved_key:
+        headers["Authorization"] = f"Bearer {resolved_key}"
+    return headers
+
+
+def fetch_lmproxy_models(
+    base_url: str = DEFAULT_AI_BASE_URL,
+    *,
+    api_key: str = "",
+    timeout: float = 5.0,
+) -> dict[str, object]:
+    """LMproxy (/models) から利用可能なモデル ID 一覧を取得する."""
+    clean_base = validate_openai_base_url(base_url)
+    req = urllib.request.Request(
+        f"{clean_base}/models",
+        headers=_build_ai_headers(api_key),
+        method="GET",
+    )
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        data = json.loads(resp.read().decode("utf-8"))
+
+    raw_items = data.get("data") or []
+    models = sorted(
+        {
+            str(item["id"]).strip()
+            for item in raw_items
+            if isinstance(item, dict) and str(item.get("id", "")).strip()
+        }
+    )
+    return {"url": clean_base, "models": models}
+
+
 def normalize_reading_with_ai(
     text: str,
     *,
@@ -90,15 +130,7 @@ def normalize_reading_with_ai(
 
     clean_base = validate_openai_base_url(base_url)
     endpoint = f"{clean_base}/chat/completions"
-    resolved_key = (
-        api_key.strip()
-        or os.environ.get("LMPROXY_API_KEY", "").strip()
-        or os.environ.get("OPENAI_API_KEY", "").strip()
-    )
-
-    headers = {"Content-Type": "application/json"}
-    if resolved_key:
-        headers["Authorization"] = f"Bearer {resolved_key}"
+    headers = _build_ai_headers(api_key)
 
     payload = {
         "model": (model or DEFAULT_AI_MODEL).strip(),

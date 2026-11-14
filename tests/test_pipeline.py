@@ -430,6 +430,21 @@ class TestWebUIVoicesAndMultipart(unittest.TestCase):
             )
             self.assertEqual(fallback, "ブイエスコードでUnknownToolを起動")
 
+    def test_fetch_lmproxy_models(self) -> None:
+        import io
+        import json
+
+        from pronunciation import fetch_lmproxy_models
+
+        fake_models = {"data": [{"id": "gpt-4o-mini"}, {"id": "claude-3-5-sonnet"}]}
+        with patch(
+            "urllib.request.urlopen",
+            return_value=io.BytesIO(json.dumps(fake_models).encode("utf-8")),
+        ):
+            res = fetch_lmproxy_models("http://127.0.0.1:4000/v1/")
+        self.assertEqual(res["url"], "http://127.0.0.1:4000/v1")
+        self.assertEqual(res["models"], ["claude-3-5-sonnet", "gpt-4o-mini"])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -45,6 +45,7 @@ from pptx_to_video import (
 from pronunciation import (
     DEFAULT_AI_BASE_URL,
     DEFAULT_AI_MODEL,
+    fetch_lmproxy_models,
     load_pronunciation_dict,
     prepare_tts_text,
     validate_openai_base_url,
@@ -637,6 +638,9 @@ def make_handler(manager: JobManager) -> type[BaseHTTPRequestHandler]:
             if path == "/api/tts-preview":
                 self._handle_tts_preview()
                 return
+            if path == "/api/lmproxy-models":
+                self._handle_lmproxy_models()
+                return
 
             parts = [p for p in path.split("/") if p]
             if len(parts) == 4 and parts[0] == "api" and parts[1] == "jobs":
@@ -745,6 +749,28 @@ def make_handler(manager: JobManager) -> type[BaseHTTPRequestHandler]:
                 self.wfile.write(audio_bytes)
             except Exception as exc:  # noqa: BLE001
                 self._send_json(HTTPStatus.BAD_REQUEST, {"error": str(exc)})
+
+        def _handle_lmproxy_models(self) -> None:
+            try:
+                content_length = int(self.headers.get("Content-Length", "0"))
+            except ValueError:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "不正な Content-Length です。"})
+                return
+            if content_length < 0 or content_length > 16384:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "リクエストサイズが無効です。"})
+                return
+
+            try:
+                raw_body = self.rfile.read(content_length).decode("utf-8") if content_length > 0 else "{}"
+                payload = json.loads(raw_body or "{}")
+                base_url = str(payload.get("base_url", DEFAULT_AI_BASE_URL)).strip() or DEFAULT_AI_BASE_URL
+                api_key = str(payload.get("api_key", "")).strip()
+                self._send_json(
+                    HTTPStatus.OK,
+                    fetch_lmproxy_models(base_url, api_key=api_key),
+                )
+            except Exception as exc:  # noqa: BLE001
+                self._send_json(HTTPStatus.BAD_GATEWAY, {"error": f"LMproxy 接続エラー: {exc}"})
 
         def _handle_record_action(self, job_id: str, action: str) -> None:
             job = manager.get_job(job_id)

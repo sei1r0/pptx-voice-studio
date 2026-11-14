@@ -396,33 +396,28 @@
               </label>
               <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
                 <input id="ai-reading-enabled" type="checkbox" style="width: auto;">
-                <span>辞書にない英文・略語を AI (OpenAI 互換 / LMproxy) でバックグラウンド自動変換する</span>
+                <span>辞書にない英文・略語を LMproxy (AI) でバックグラウンド自動変換する</span>
               </label>
             </div>
-            <div id="ai-reading-panel" class="hidden form-grid" style="margin-top: 12px;">
-              <label class="field">
-                AI 接続先プリセット
-                <select id="ai-preset-select">
-                  <option value="http://127.0.0.1:4000/v1|gpt-4o-mini" selected>LMproxy (標準: http://127.0.0.1:4000/v1)</option>
-                  <option value="http://127.0.0.1:11434/v1|qwen2.5:3b">Ollama (http://127.0.0.1:11434/v1)</option>
-                  <option value="http://127.0.0.1:1234/v1|local-model">LM Studio (http://127.0.0.1:1234/v1)</option>
-                  <option value="https://generativelanguage.googleapis.com/v1beta/openai|gemini-2.5-flash">Gemini API (OpenAI互換)</option>
-                  <option value="https://api.openai.com/v1|gpt-4o-mini">OpenAI API</option>
-                  <option value="custom">カスタム</option>
-                </select>
-              </label>
-              <label class="field">
-                Base URL
-                <input id="ai-base-url" type="url" value="http://127.0.0.1:4000/v1" placeholder="http://127.0.0.1:4000/v1">
-              </label>
-              <label class="field">
-                モデル名
-                <input id="ai-model" type="text" value="gpt-4o-mini" placeholder="gpt-4o-mini">
-              </label>
-              <label class="field">
-                API Key (環境変数設定済み/ローカル不要なら空で可)
-                <input id="ai-api-key" type="password" placeholder="sk-... / AIza...">
-              </label>
+            <div id="ai-reading-panel" class="hidden" style="margin-top: 12px;">
+              <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 10px;">
+                <strong style="font-size: 0.9rem;">LMproxy 設定 <small id="ai-model-meta" style="color: var(--text-muted); font-weight: 400;"></small></strong>
+                <button id="ai-fetch-models-btn" type="button" class="btn btn-secondary" style="padding: 8px 12px;">モデル一覧を取得</button>
+              </div>
+              <div class="form-grid">
+                <label class="field">
+                  LMproxy Base URL
+                  <input id="ai-base-url" type="url" value="http://127.0.0.1:4000/v1" placeholder="http://127.0.0.1:4000/v1">
+                </label>
+                <label class="field">
+                  使用モデル
+                  <select id="ai-model-select"></select>
+                </label>
+                <label class="field">
+                  API Key (環境変数設定済み/不要なら空で可)
+                  <input id="ai-api-key" type="password" placeholder="sk-...">
+                </label>
+              </div>
             </div>
           </div>
 
@@ -486,9 +481,10 @@
     const dictEnabledCheckbox = document.getElementById("dict-enabled");
     const aiReadingEnabledCheckbox = document.getElementById("ai-reading-enabled");
     const aiReadingPanel = document.getElementById("ai-reading-panel");
-    const aiPresetSelect = document.getElementById("ai-preset-select");
+    const aiModelMeta = document.getElementById("ai-model-meta");
+    const aiFetchModelsBtn = document.getElementById("ai-fetch-models-btn");
     const aiBaseUrlInput = document.getElementById("ai-base-url");
-    const aiModelInput = document.getElementById("ai-model");
+    const aiModelSelect = document.getElementById("ai-model-select");
     const aiApiKeyInput = document.getElementById("ai-api-key");
     const voiceSelect = document.getElementById("voice-select");
     const voiceMeta = document.getElementById("voice-meta");
@@ -687,17 +683,52 @@
       showError("");
       renderVoicevoxStyles();
     });
+    async function loadLmproxyModels() {
+      aiFetchModelsBtn.disabled = true;
+      aiModelMeta.textContent = "取得中...";
+      showError("");
+      try {
+        const res = await fetch("/api/lmproxy-models", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            base_url: (aiBaseUrlInput.value || "http://127.0.0.1:4000/v1").trim(),
+            api_key: (aiApiKeyInput.value || "").trim(),
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data.error || "LMproxy からモデル一覧を取得できませんでした。");
+        }
+        const models = Array.isArray(data.models) ? data.models : [];
+        const prevModel = aiModelSelect.value;
+        aiModelSelect.replaceChildren();
+        for (const m of models) {
+          const opt = document.createElement("option");
+          opt.value = m;
+          opt.textContent = m;
+          aiModelSelect.appendChild(opt);
+        }
+        if (prevModel && models.includes(prevModel)) {
+          aiModelSelect.value = prevModel;
+        }
+        aiModelMeta.textContent = `(${models.length}件)`;
+      } catch (err) {
+        aiModelSelect.replaceChildren();
+        aiModelMeta.textContent = "(未接続)";
+        showError(err.message);
+      } finally {
+        aiFetchModelsBtn.disabled = false;
+      }
+    }
+
     aiReadingEnabledCheckbox.addEventListener("change", () => {
       aiReadingPanel.classList.toggle("hidden", !aiReadingEnabledCheckbox.checked);
-    });
-    aiPresetSelect.addEventListener("change", () => {
-      const val = aiPresetSelect.value;
-      if (val !== "custom" && val.includes("|")) {
-        const [url, model] = val.split("|");
-        aiBaseUrlInput.value = url;
-        aiModelInput.value = model;
+      if (aiReadingEnabledCheckbox.checked && aiModelSelect.options.length === 0) {
+        loadLmproxyModels();
       }
     });
+    aiFetchModelsBtn.addEventListener("click", () => loadLmproxyModels());
 
     previewVoiceBtn.addEventListener("click", async () => {
       showError("");
@@ -720,6 +751,10 @@
         showError("VOICEVOX の話者・スタイルを取得して選択してください。");
         return;
       }
+      if (aiReadingEnabledCheckbox.checked && !aiModelSelect.value) {
+        showError("LMproxy のモデル一覧を取得して使用モデルを選択してください。");
+        return;
+      }
 
       previewVoiceBtn.disabled = true;
       const origLabel = previewVoiceBtn.textContent;
@@ -729,7 +764,7 @@
           enable_pronunciation_dict: dictEnabledCheckbox.checked,
           ai_reading_enabled: aiReadingEnabledCheckbox.checked,
           ai_reading_base_url: (aiBaseUrlInput.value || "http://127.0.0.1:4000/v1").trim(),
-          ai_reading_model: (aiModelInput.value || "gpt-4o-mini").trim(),
+          ai_reading_model: aiModelSelect.value || "gpt-4o-mini",
           ai_reading_api_key: (aiApiKeyInput.value || "").trim(),
         };
         const previewPayload = modeSelect.value === "voicevox"
@@ -842,6 +877,10 @@
         showError("VOICEVOX の話者・スタイルを取得して選択してください。");
         return;
       }
+      if (aiReadingEnabledCheckbox.checked && !aiModelSelect.value) {
+        showError("LMproxy のモデル一覧を取得して使用モデルを選択してください。");
+        return;
+      }
 
       const [width, height] = resolutionSelect.value.split("x");
       const body = new FormData();
@@ -865,7 +904,7 @@
       body.append("enable_pronunciation_dict", dictEnabledCheckbox.checked ? "1" : "0");
       body.append("ai_reading_enabled", aiReadingEnabledCheckbox.checked ? "1" : "0");
       body.append("ai_reading_base_url", (aiBaseUrlInput.value || "http://127.0.0.1:4000/v1").trim());
-      body.append("ai_reading_model", (aiModelInput.value || "gpt-4o-mini").trim());
+      body.append("ai_reading_model", aiModelSelect.value || "gpt-4o-mini");
       body.append("ai_reading_api_key", (aiApiKeyInput.value || "").trim());
 
       submitBtn.disabled = true;
