@@ -42,6 +42,13 @@ from pptx_to_video import (
     sanitize_speaker_notes,
     setup_logging,
 )
+from pronunciation import (
+    DEFAULT_AI_BASE_URL,
+    DEFAULT_AI_MODEL,
+    load_pronunciation_dict,
+    prepare_tts_text,
+    validate_openai_base_url,
+)
 
 MAX_UPLOAD_BYTES = 200 * 1024 * 1024  # 200 MB
 JOB_ID_PATTERN = re.compile(r"^[0-9a-f]{32}$")
@@ -157,11 +164,26 @@ def synthesize_preview_audio(
     voicevox_pitch: float = 0.0,
     voicevox_intonation: float = 1.0,
     voicevox_volume: float = 1.0,
+    enable_pronunciation_dict: bool = True,
+    ai_reading_enabled: bool = False,
+    ai_reading_base_url: str = DEFAULT_AI_BASE_URL,
+    ai_reading_model: str = DEFAULT_AI_MODEL,
+    ai_reading_api_key: str = "",
 ) -> tuple[bytes, str]:
     """UI 試聴用に単発テキストを指定話者で音声合成し、(bytes, content_type) を返す."""
     cleaned = sanitize_speaker_notes(raw_text, slide_num=1, empty_template="音声プレビューのテストです。")
     if len(cleaned) > 500:
         cleaned = cleaned[:500]
+
+    dict_mapping = load_pronunciation_dict() if enable_pronunciation_dict else None
+    cleaned = prepare_tts_text(
+        cleaned,
+        dict_mapping=dict_mapping,
+        ai_enabled=ai_reading_enabled,
+        ai_base_url=ai_reading_base_url,
+        ai_model=ai_reading_model,
+        ai_api_key=ai_reading_api_key,
+    )
 
     config = PipelineConfig(
         voice=voice,
@@ -652,6 +674,11 @@ def make_handler(manager: JobManager) -> type[BaseHTTPRequestHandler]:
                     raise ValueError(f"未知の生成方式です: {mode}")
 
                 voice_value = fields.get("voice", DEFAULT_VOICE_KEY)
+                ai_enabled = fields.get("ai_reading_enabled", "0").strip().lower() in ("1", "true", "on", "yes")
+                ai_base_url = fields.get("ai_reading_base_url", DEFAULT_AI_BASE_URL).strip() or DEFAULT_AI_BASE_URL
+                if ai_enabled:
+                    ai_base_url = validate_openai_base_url(ai_base_url)
+
                 config = PipelineConfig(
                     voice=DEFAULT_VOICE_KEY if mode == "edge-record" else voice_value,
                     slide_width=int(fields.get("width", str(DEFAULT_SLIDE_WIDTH))),
@@ -663,6 +690,12 @@ def make_handler(manager: JobManager) -> type[BaseHTTPRequestHandler]:
                     voicevox_pitch=float(fields.get("voicevox_pitch", "0.0")),
                     voicevox_intonation=float(fields.get("voicevox_intonation", "1.0")),
                     voicevox_volume=float(fields.get("voicevox_volume", "1.0")),
+                    enable_pronunciation_dict=fields.get("enable_pronunciation_dict", "1").strip().lower()
+                    in ("1", "true", "on", "yes"),
+                    ai_reading_enabled=ai_enabled,
+                    ai_reading_base_url=ai_base_url,
+                    ai_reading_model=fields.get("ai_reading_model", DEFAULT_AI_MODEL).strip() or DEFAULT_AI_MODEL,
+                    ai_reading_api_key=fields.get("ai_reading_api_key", "").strip(),
                 )
                 config.resolve_voice_id()
                 if mode == "voicevox":
@@ -697,6 +730,13 @@ def make_handler(manager: JobManager) -> type[BaseHTTPRequestHandler]:
                     voicevox_pitch=float(payload.get("voicevox_pitch", 0.0)),
                     voicevox_intonation=float(payload.get("voicevox_intonation", 1.0)),
                     voicevox_volume=float(payload.get("voicevox_volume", 1.0)),
+                    enable_pronunciation_dict=bool(payload.get("enable_pronunciation_dict", True)),
+                    ai_reading_enabled=bool(payload.get("ai_reading_enabled", False)),
+                    ai_reading_base_url=str(payload.get("ai_reading_base_url", DEFAULT_AI_BASE_URL)).strip()
+                    or DEFAULT_AI_BASE_URL,
+                    ai_reading_model=str(payload.get("ai_reading_model", DEFAULT_AI_MODEL)).strip()
+                    or DEFAULT_AI_MODEL,
+                    ai_reading_api_key=str(payload.get("ai_reading_api_key", "")).strip(),
                 )
                 self.send_response(HTTPStatus.OK)
                 self.send_header("Content-Type", content_type)

@@ -370,6 +370,66 @@ class TestWebUIVoicesAndMultipart(unittest.TestCase):
         self.assertEqual(speakers[0]["name"], "ずんだもん")
         self.assertEqual(speakers[0]["styles"][0]["id"], 3)
 
+    def test_pronunciation_dict_word_boundaries(self) -> None:
+        from pronunciation import apply_pronunciation_dict, load_pronunciation_dict
+
+        mapping = load_pronunciation_dict()
+        self.assertGreaterEqual(len(mapping), 100)
+        text = "VSCodeでpptxを作成し、macOSのmain関数とAIを確認する。"
+        converted = apply_pronunciation_dict(text, mapping)
+        self.assertIn("ブイエスコード", converted)
+        self.assertIn("ピーピーティーエックス", converted)
+        self.assertIn("マックオーエス", converted)
+        self.assertIn("main関数", converted)
+        self.assertIn("エーアイ", converted)
+
+    def test_prepare_tts_text_with_ai_and_fallback(self) -> None:
+        import io
+        import json
+
+        from pronunciation import prepare_tts_text
+
+        mapping = {"VSCode": "ブイエスコード", "pptx": "ピーピーティーエックス"}
+        fake_response = {
+            "choices": [{"message": {"content": "ブイエスコードでピーピーティーエックスとクロノスを起動"}}]
+        }
+        cache: dict[str, str] = {}
+        with patch(
+            "urllib.request.urlopen",
+            return_value=io.BytesIO(json.dumps(fake_response).encode("utf-8")),
+        ) as mock_open:
+            out = prepare_tts_text(
+                "VSCodeでpptxとChronosを起動",
+                dict_mapping=mapping,
+                ai_enabled=True,
+                ai_base_url="http://127.0.0.1:4000/v1",
+                ai_model="gpt-4o-mini",
+                cache=cache,
+            )
+            self.assertEqual(out, "ブイエスコードでピーピーティーエックスとクロノスを起動")
+            # 2回目はキャッシュヒットして urlopen が増えないこと
+            out2 = prepare_tts_text(
+                "VSCodeでpptxとChronosを起動",
+                dict_mapping=mapping,
+                ai_enabled=True,
+                ai_base_url="http://127.0.0.1:4000/v1",
+                ai_model="gpt-4o-mini",
+                cache=cache,
+            )
+            self.assertEqual(out2, out)
+            self.assertEqual(mock_open.call_count, 1)
+
+        # AI 接続エラー時は辞書適用済みテキストに安全にフォールバックすること
+        with patch("urllib.request.urlopen", side_effect=OSError("connection refused")):
+            fallback = prepare_tts_text(
+                "VSCodeでUnknownToolを起動",
+                dict_mapping=mapping,
+                ai_enabled=True,
+                ai_base_url="http://127.0.0.1:4000/v1",
+                ai_model="gpt-4o-mini",
+            )
+            self.assertEqual(fallback, "ブイエスコードでUnknownToolを起動")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -32,6 +32,13 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from pronunciation import (
+    DEFAULT_AI_BASE_URL,
+    DEFAULT_AI_MODEL,
+    load_pronunciation_dict,
+    prepare_tts_text,
+)
+
 # ==============================================================================
 # 話者 (Voice ID) 設定エリア
 # ==============================================================================
@@ -111,6 +118,12 @@ class PipelineConfig:
     voicevox_pitch: float = 0.0
     voicevox_intonation: float = 1.0
     voicevox_volume: float = 1.0
+    enable_pronunciation_dict: bool = True
+    pronunciation_dict_path: Path | None = None
+    ai_reading_enabled: bool = False
+    ai_reading_base_url: str = DEFAULT_AI_BASE_URL
+    ai_reading_model: str = DEFAULT_AI_MODEL
+    ai_reading_api_key: str = ""
 
     def resolve_voice_id(self) -> str:
         """設定された話者キーまたは Voice ID を解決する."""
@@ -563,6 +576,12 @@ class PowerPointVideoPipeline:
         )
         self.logger.info("[フェーズ2] %s による音声合成を開始します。", engine_label)
         breaker = CircuitBreaker(failure_threshold=self.config.circuit_breaker_threshold)
+        dict_mapping = (
+            load_pronunciation_dict(self.config.pronunciation_dict_path)
+            if self.config.enable_pronunciation_dict
+            else None
+        )
+        reading_cache: dict[str, str] = {}
 
         for asset in assets:
             self._check_cancelled()
@@ -577,10 +596,20 @@ class PowerPointVideoPipeline:
                 self._apply_silent_fallback(asset, work_dir)
                 continue
 
+            tts_text = prepare_tts_text(
+                asset.note_text,
+                dict_mapping=dict_mapping,
+                ai_enabled=self.config.ai_reading_enabled,
+                ai_base_url=self.config.ai_reading_base_url,
+                ai_model=self.config.ai_reading_model,
+                ai_api_key=self.config.ai_reading_api_key,
+                cache=reading_cache,
+            )
+
             if is_voicevox:
                 speaker_id = int(self.voice_id.split(":", 1)[1])
                 success = self._synthesize_voicevox_wav(
-                    text=asset.note_text,
+                    text=tts_text,
                     output_path=out_audio,
                     speaker_id=speaker_id,
                     slide_num=asset.index,
@@ -588,7 +617,7 @@ class PowerPointVideoPipeline:
             elif is_winrt:
                 winrt_voice_name = self.voice_id.split(":", 1)[1].strip()
                 success = self._synthesize_winrt_wav(
-                    text=asset.note_text,
+                    text=tts_text,
                     output_path=out_audio,
                     voice_name=winrt_voice_name,
                     slide_num=asset.index,
@@ -596,14 +625,14 @@ class PowerPointVideoPipeline:
             elif is_sapi:
                 sapi_voice_name = self.voice_id.split(":", 1)[1].strip()
                 success = self._synthesize_sapi_wav(
-                    text=asset.note_text,
+                    text=tts_text,
                     output_path=out_audio,
                     voice_name=sapi_voice_name,
                     slide_num=asset.index,
                 )
             else:
                 success = await self._synthesize_with_retry(
-                    text=asset.note_text,
+                    text=tts_text,
                     output_path=out_audio,
                     slide_num=asset.index,
                 )

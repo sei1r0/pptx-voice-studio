@@ -387,6 +387,45 @@
             </div>
           </div>
 
+          <div style="margin-top: 14px; padding: 14px 16px; border-radius: 12px; background: var(--surface-2); border: 1px solid var(--border);">
+            <strong style="font-size: 0.95rem; display: block; margin-bottom: 10px;">読み上げテキスト最適化（英語・略語変換）</strong>
+            <div style="display: flex; flex-direction: column; gap: 8px; font-size: 0.9rem;">
+              <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                <input id="dict-enabled" type="checkbox" checked style="width: auto;">
+                <span>固定読み辞書を自動適用する（例: <code>pptx</code> → ピーピーティーエックス、<code>VSCode</code> → ブイエスコード）</span>
+              </label>
+              <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                <input id="ai-reading-enabled" type="checkbox" style="width: auto;">
+                <span>辞書にない英文・略語を AI (OpenAI 互換 / LMproxy) でバックグラウンド自動変換する</span>
+              </label>
+            </div>
+            <div id="ai-reading-panel" class="hidden form-grid" style="margin-top: 12px;">
+              <label class="field">
+                AI 接続先プリセット
+                <select id="ai-preset-select">
+                  <option value="http://127.0.0.1:4000/v1|gpt-4o-mini" selected>LMproxy (標準: http://127.0.0.1:4000/v1)</option>
+                  <option value="http://127.0.0.1:11434/v1|qwen2.5:3b">Ollama (http://127.0.0.1:11434/v1)</option>
+                  <option value="http://127.0.0.1:1234/v1|local-model">LM Studio (http://127.0.0.1:1234/v1)</option>
+                  <option value="https://generativelanguage.googleapis.com/v1beta/openai|gemini-2.5-flash">Gemini API (OpenAI互換)</option>
+                  <option value="https://api.openai.com/v1|gpt-4o-mini">OpenAI API</option>
+                  <option value="custom">カスタム</option>
+                </select>
+              </label>
+              <label class="field">
+                Base URL
+                <input id="ai-base-url" type="url" value="http://127.0.0.1:4000/v1" placeholder="http://127.0.0.1:4000/v1">
+              </label>
+              <label class="field">
+                モデル名
+                <input id="ai-model" type="text" value="gpt-4o-mini" placeholder="gpt-4o-mini">
+              </label>
+              <label class="field">
+                API Key (環境変数設定済み/ローカル不要なら空で可)
+                <input id="ai-api-key" type="password" placeholder="sk-... / AIza...">
+              </label>
+            </div>
+          </div>
+
           <div style="margin-top: 18px; padding: 16px; border-radius: 12px; background: var(--surface-2); border: 1px solid var(--border);">
             <label class="field">
               サンプルテキスト（音声確認用・自由に編集可能）
@@ -444,6 +483,13 @@
     const vvPitchInput = document.getElementById("vv-pitch");
     const vvIntonationInput = document.getElementById("vv-intonation");
     const vvVolumeInput = document.getElementById("vv-volume");
+    const dictEnabledCheckbox = document.getElementById("dict-enabled");
+    const aiReadingEnabledCheckbox = document.getElementById("ai-reading-enabled");
+    const aiReadingPanel = document.getElementById("ai-reading-panel");
+    const aiPresetSelect = document.getElementById("ai-preset-select");
+    const aiBaseUrlInput = document.getElementById("ai-base-url");
+    const aiModelInput = document.getElementById("ai-model");
+    const aiApiKeyInput = document.getElementById("ai-api-key");
     const voiceSelect = document.getElementById("voice-select");
     const voiceMeta = document.getElementById("voice-meta");
     const previewVoiceBtn = document.getElementById("preview-voice-btn");
@@ -641,6 +687,17 @@
       showError("");
       renderVoicevoxStyles();
     });
+    aiReadingEnabledCheckbox.addEventListener("change", () => {
+      aiReadingPanel.classList.toggle("hidden", !aiReadingEnabledCheckbox.checked);
+    });
+    aiPresetSelect.addEventListener("change", () => {
+      const val = aiPresetSelect.value;
+      if (val !== "custom" && val.includes("|")) {
+        const [url, model] = val.split("|");
+        aiBaseUrlInput.value = url;
+        aiModelInput.value = model;
+      }
+    });
 
     previewVoiceBtn.addEventListener("click", async () => {
       showError("");
@@ -668,6 +725,13 @@
       const origLabel = previewVoiceBtn.textContent;
       previewVoiceBtn.textContent = "生成中...";
       try {
+        const readingOptions = {
+          enable_pronunciation_dict: dictEnabledCheckbox.checked,
+          ai_reading_enabled: aiReadingEnabledCheckbox.checked,
+          ai_reading_base_url: (aiBaseUrlInput.value || "http://127.0.0.1:4000/v1").trim(),
+          ai_reading_model: (aiModelInput.value || "gpt-4o-mini").trim(),
+          ai_reading_api_key: (aiApiKeyInput.value || "").trim(),
+        };
         const previewPayload = modeSelect.value === "voicevox"
           ? {
               voice: `voicevox:${vvStyleSelect.value}`,
@@ -677,8 +741,9 @@
               voicevox_pitch: Number(vvPitchInput.value || 0.0),
               voicevox_intonation: Number(vvIntonationInput.value || 1.0),
               voicevox_volume: Number(vvVolumeInput.value || 1.0),
+              ...readingOptions,
             }
-          : { voice: voiceSelect.value, text: sampleText };
+          : { voice: voiceSelect.value, text: sampleText, ...readingOptions };
         const res = await fetch("/api/tts-preview", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -797,6 +862,11 @@
       body.append("height", height);
       body.append("fps", fpsInput.value);
       body.append("pause", pauseInput.value);
+      body.append("enable_pronunciation_dict", dictEnabledCheckbox.checked ? "1" : "0");
+      body.append("ai_reading_enabled", aiReadingEnabledCheckbox.checked ? "1" : "0");
+      body.append("ai_reading_base_url", (aiBaseUrlInput.value || "http://127.0.0.1:4000/v1").trim());
+      body.append("ai_reading_model", (aiModelInput.value || "gpt-4o-mini").trim());
+      body.append("ai_reading_api_key", (aiApiKeyInput.value || "").trim());
 
       submitBtn.disabled = true;
       cancelRequested = false;
